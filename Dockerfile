@@ -24,5 +24,4 @@ COPY --from=build --chown=app:app /app/public ./public
 USER app
 EXPOSE 3020
 VOLUME /app/data
-# node:sqlite still prints an ExperimentalWarning on Node 24.
-CMD ["node", "--disable-warning=ExperimentalWarning", "server.js"]
+CMD ["node", "server.js"]

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       };
     });
 
-  const userId = upsertUser(`dev:${battletag.toLowerCase()}`, battletag);
-  syncCharacters(userId, characters);
+  const userId = await upsertUser(`dev:${battletag.toLowerCase()}`, battletag);
+  await syncCharacters(userId, characters);
   return signedInRedirect(userId);
 }

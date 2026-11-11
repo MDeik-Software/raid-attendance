@@ -11,8 +11,8 @@ export function appUrl(path: string): URL {
 }
 
 /** Starts a session for the user and sends them to the grid (303 so a POST turns into a GET). */
-export function signedInRedirect(userId: number): NextResponse {
-  const { token, expires } = createSession(userId);
+export async function signedInRedirect(userId: number): Promise<NextResponse> {
+  const { token, expires } = await createSession(userId);
   const res = NextResponse.redirect(appUrl("/"), 303);
   res.cookies.set(sessionCookie(token, expires));
   res.cookies.set({ name: STATE_COOKIE, value: "", path: "/api/auth", maxAge: 0 });

@@ -12,7 +12,7 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const roster = listRoster();
+  const roster = await listRoster();
   const mine = roster.filter((c) => c.ownerUserId === user.id);
 
   if (!user.isAdmin && mine.length === 0) {
@@ -32,7 +32,7 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
 
   const { past } = await searchParams;
   const showPast = past === "1";
-  const settings = getSettings();
+  const settings = await getSettings();
   const today = todayIn(config.timeZone);
   const allDates = raidDates(settings.startDate, settings.endDate, settings.raidDays);
   const dates = showPast ? allDates : allDates.filter((d) => d >= today);
@@ -40,7 +40,7 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
 
   const answered = new Map<string, Status>();
   if (dates.length > 0) {
-    for (const a of listAvailability(dates[0], dates[dates.length - 1])) {
+    for (const a of await listAvailability(dates[0], dates[dates.length - 1])) {
       answered.set(`${a.characterId}|${a.date}`, a.status);
     }
   }

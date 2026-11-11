@@ -19,12 +19,10 @@ export async function setAvailabilityAction(characterId: number, date: string, s
     return { ok: false, error: "That change was not valid." };
   }
 
-  const settings = repo.getSettings();
+  const [settings, character] = await Promise.all([repo.getSettings(), repo.getRosterCharacter(characterId)]);
   const isRaidDate =
     date >= settings.startDate && date <= settings.endDate && settings.raidDays.includes(weekday(date));
   if (!isRaidDate) return { ok: false, error: "That date is not a raid night." };
-
-  const character = repo.getRosterCharacter(characterId);
   if (!character) return { ok: false, error: "That character is no longer on the roster." };
 
   if (!user.isAdmin) {
@@ -32,7 +30,7 @@ export async function setAvailabilityAction(characterId: number, date: string, s
     if (date < todayIn(config.timeZone)) return { ok: false, error: "Past raid nights are locked." };
   }
 
-  repo.setAvailability(characterId, date, status, user.id);
+  await repo.setAvailability(characterId, date, status, user.id);
   return { ok: true };
 }
 
@@ -64,33 +62,34 @@ function readCharacterFields(form: FormData) {
   return { name, classId, groupNo };
 }
 
-function readId(form: FormData): number {
+async function readCharacter(form: FormData): Promise<repo.RosterCharacter> {
   const id = Number(form.get("id"));
-  if (!Number.isInteger(id) || !repo.getRosterCharacter(id)) fail("That character is no longer on the roster.");
-  return id;
+  const character = Number.isInteger(id) ? await repo.getRosterCharacter(id) : undefined;
+  if (!character) fail("That character is no longer on the roster.");
+  return character;
 }
 
 export async function addCharacterAction(form: FormData) {
   await requireAdmin();
   const { name, classId, groupNo } = readCharacterFields(form);
-  if (repo.nameTaken(name)) fail(`${name} is already on the roster.`);
-  repo.addCharacter(name, classId, groupNo);
+  if (await repo.nameTaken(name)) fail(`${name} is already on the roster.`);
+  await repo.addCharacter(name, classId, groupNo);
   done(`Added ${name}.`);
 }
 
 export async function updateCharacterAction(form: FormData) {
   await requireAdmin();
-  const id = readId(form);
+  const { id } = await readCharacter(form);
   const { name, classId, groupNo } = readCharacterFields(form);
-  if (repo.nameTaken(name, id)) fail(`${name} is already on the roster.`);
-  repo.updateCharacter(id, name, classId, groupNo);
+  if (await repo.nameTaken(name, id)) fail(`${name} is already on the roster.`);
+  await repo.updateCharacter(id, name, classId, groupNo);
   done(`Saved ${name}.`);
 }
 
 export async function moveCharacterAction(form: FormData) {
   await requireAdmin();
-  const id = readId(form);
-  repo.moveCharacter(id, form.get("direction") === "up" ? "up" : "down");
+  const { id } = await readCharacter(form);
+  await repo.moveCharacter(id, form.get("direction") === "up" ? "up" : "down");
   revalidatePath("/admin");
   revalidatePath("/");
   redirect("/admin");
@@ -98,17 +97,15 @@ export async function moveCharacterAction(form: FormData) {
 
 export async function resetClaimAction(form: FormData) {
   await requireAdmin();
-  const id = readId(form);
-  const name = repo.getRosterCharacter(id)?.name;
-  repo.resetClaim(id);
+  const { id, name } = await readCharacter(form);
+  await repo.resetClaim(id);
   done(`${name} is unclaimed; the next player who signs in with that character name claims it.`);
 }
 
 export async function removeCharacterAction(form: FormData) {
   await requireAdmin();
-  const id = readId(form);
-  const name = repo.getRosterCharacter(id)?.name;
-  repo.removeCharacter(id);
+  const { id, name } = await readCharacter(form);
+  await repo.removeCharacter(id);
   done(`Removed ${name} and their answers.`);
 }
 
@@ -128,6 +125,6 @@ export async function saveSettingsAction(form: FormData) {
   if (raidDays.length === 0) fail("Pick at least one raid night.");
   const defaultYesDays = [...new Set(days("defaultYesDays"))].filter((d) => raidDays.includes(d));
 
-  repo.saveSettings({ startDate, endDate, raidDays, defaultYesDays });
+  await repo.saveSettings({ startDate, endDate, raidDays, defaultYesDays });
   done("Settings saved.");
 }

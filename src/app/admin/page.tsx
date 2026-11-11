@@ -23,8 +23,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   if (!user.isAdmin) redirect("/");
 
   const { error, ok } = await searchParams;
-  const settings = getSettings();
-  const roster = listRoster();
+  const [settings, roster] = await Promise.all([getSettings(), listRoster()]);
 
   return (
     <>

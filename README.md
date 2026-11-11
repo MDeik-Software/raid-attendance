@@ -4,8 +4,8 @@ Raid night availability for the roster. Players sign in with Battle.net and mark
 **yes**, **no** or **-** for their own characters; officers can change everything, manage the roster
 and set the schedule.
 
-Next.js 16 (App Router, server actions) with a single SQLite file through Node's built-in `node:sqlite`.
-No separate database server.
+Next.js 16 (App Router, server actions) on SQLite through `@libsql/client`: a hosted [Turso](https://turso.tech)
+database in production (required on Vercel), or a plain local file for development and Docker.
 
 ## How players are matched to rows
 
@@ -37,8 +37,27 @@ Players only see character names. BattleTags are shown to officers only; Battle.
 2. `cp .env.example .env` and fill in `BNET_CLIENT_ID`, `BNET_CLIENT_SECRET` and `ADMIN_BATTLETAGS`.
    Quote the BattleTags (`ADMIN_BATTLETAGS="Name#1234,Other#5678"`): an unquoted `#` starts a comment.
 
-The first start creates `data/raid-roster.db` and seeds the 23-character roster and the schedule
-(Wed, Thu, Sun, Mon, Tue from 2026-11-12 to 2027-01-12; Thursdays and Mondays start as yes).
+The first start creates the tables (in Turso, or in `data/raid-roster.db` when `TURSO_DATABASE_URL` is empty)
+and seeds the 23-character roster and the schedule (Wed, Thu, Sun, Mon, Tue from 2026-11-12 to 2027-01-12;
+Thursdays and Mondays start as yes).
+
+## Deploy on Vercel (free Hobby plan)
+
+Vercel's servers keep no files between requests, so the database must be Turso there.
+
+1. **Turso:** sign up at <https://turso.tech> (free plan), create a database in an EU location close to
+   Frankfurt, and create a token for it. Note the database URL (`libsql://…turso.io`) and the token.
+   Installing the Turso integration from the Vercel Marketplace instead fills in both variables for you.
+2. **Vercel:** *Add New → Project*, import `MDeik-Software/raid-attendance` (the Hobby plan only deploys
+   organization repos that are public). Framework preset: Next.js; no build settings to change.
+3. **Environment variables** (Project Settings → Environment Variables, Production):
+   `APP_URL` (e.g. `https://raid-attendance.vercel.app`), `BNET_CLIENT_ID`, `BNET_CLIENT_SECRET`,
+   `BNET_REGION=eu`, `ADMIN_BATTLETAGS` (no quotes needed here), `APP_TIMEZONE=Europe/Athens`,
+   `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`. Do not set `DEV_LOGIN`.
+4. **Deploy**, then add `APP_URL/api/auth/callback` as a redirect URL on the Battle.net client. Use the
+   production address only: preview deployments get other URLs that Battle.net will not accept.
+
+`vercel.json` pins the functions to Frankfurt (`fra1`) so they sit next to an EU database.
 
 ## Run locally
 
@@ -57,8 +76,9 @@ BattleTag and the character names it should own. Those claims are bound to the r
 docker compose up -d --build
 ```
 
-The database lives in the `roster-data` volume. Put the app behind HTTPS in production and set `APP_URL`
-to that address; session cookies are marked secure when `APP_URL` starts with `https://`.
+Without Turso variables the database lives in the `roster-data` volume. Put the app behind HTTPS in
+production and set `APP_URL` to that address; session cookies are marked secure when `APP_URL` starts
+with `https://`.
 
 ## Configuration
 
@@ -69,5 +89,6 @@ to that address; session cookies are marked secure when `APP_URL` starts with `h
 | `BNET_REGION` | `eu` | Region of the characters (`eu`, `us`, `kr`, `tw`) |
 | `ADMIN_BATTLETAGS` | – | Comma-separated BattleTags with full access |
 | `APP_TIMEZONE` | `Europe/Athens` | When a night counts as past |
-| `DATA_DIR` | `./data` | SQLite location |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | – | Turso database; when empty, a local file is used |
+| `DATA_DIR` | `./data` | Local SQLite file location (no Turso) |
 | `DEV_LOGIN` | – | `1` enables the local test sign-in (never in production) |

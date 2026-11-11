@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
   try {
     const accessToken = await exchangeCode(code);
     const [account, characters] = await Promise.all([fetchAccount(accessToken), fetchCharacters(accessToken)]);
-    const userId = upsertUser(account.id, account.battletag);
-    syncCharacters(userId, characters);
-    return signedInRedirect(userId);
+    const userId = await upsertUser(account.id, account.battletag);
+    await syncCharacters(userId, characters);
+    return await signedInRedirect(userId);
   } catch (err) {
     console.error("Battle.net sign-in failed", err);
     return loginError("bnet");

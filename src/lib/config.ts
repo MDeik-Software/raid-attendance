@@ -17,7 +17,11 @@ export const config = {
   adminBattletags: list(process.env.ADMIN_BATTLETAGS).map((t) => t.toLowerCase()),
   /** Decides what "today" is, so past dates lock at local midnight. */
   timeZone: process.env.APP_TIMEZONE ?? "Europe/Athens",
-  dataDir: process.env.DATA_DIR ?? "./data",
+  /** Turso (libsql://…) in hosted setups; otherwise a local SQLite file under DATA_DIR. */
+  databaseUrl:
+    process.env.TURSO_DATABASE_URL ||
+    `file:${(process.env.DATA_DIR || "./data").replace(/\\/g, "/").replace(/\/+$/, "")}/raid-roster.db`,
+  databaseAuthToken: process.env.TURSO_AUTH_TOKEN ?? "",
   /** Local-only sign-in without Battle.net, for testing. Never active in production builds. */
   devLogin: process.env.DEV_LOGIN === "1" && process.env.NODE_ENV !== "production",
 };

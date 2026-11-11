@@ -1,5 +1,5 @@
 import "server-only";
-import type { DatabaseSync } from "node:sqlite";
+import type { Client, InStatement } from "@libsql/client";
 
 /** Roster as it was in the guild's roster addon on 2026-11-11: four blocks, top to bottom. */
 const ROSTER: { name: string; classId: number; group: number }[] = [
@@ -40,23 +40,27 @@ const SETTINGS: Record<string, string> = {
 };
 
 /** Fills an empty database once; never touches one that already has settings. */
-export function seed(db: DatabaseSync) {
-  const { n } = db.prepare("SELECT COUNT(*) AS n FROM settings").get() as { n: number };
-  if (n > 0) return;
+export async function seed(db: Client) {
+  const { rows } = await db.execute("SELECT COUNT(*) AS n FROM settings");
+  if (Number(rows[0].n) > 0) return;
 
   const now = new Date().toISOString();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const setting = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)");
-    for (const [key, value] of Object.entries(SETTINGS)) setting.run(key, value);
+  const statements: InStatement[] = [
+    // Inserted first: if another instance seeds at the same moment, this key collides and the whole batch rolls back.
+    { sql: "INSERT INTO settings (key, value) VALUES ('seeded_at', ?)", args: [now] },
+    ...Object.entries(SETTINGS).map(([key, value]) => ({
+      sql: "INSERT INTO settings (key, value) VALUES (?, ?)",
+      args: [key, value],
+    })),
+    ...ROSTER.map((c, i) => ({
+      sql: "INSERT INTO roster_characters (name, class_id, group_no, sort_order, created_at) VALUES (?, ?, ?, ?, ?)",
+      args: [c.name, c.classId, c.group, i + 1, now],
+    })),
+  ];
 
-    const character = db.prepare(
-      "INSERT INTO roster_characters (name, class_id, group_no, sort_order, created_at) VALUES (?, ?, ?, ?, ?)",
-    );
-    ROSTER.forEach((c, i) => character.run(c.name, c.classId, c.group, i + 1, now));
-    db.exec("COMMIT");
+  try {
+    await db.batch(statements, "write");
   } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
+    if (!String((err as { code?: unknown })?.code ?? "").startsWith("SQLITE_CONSTRAINT")) throw err;
   }
 }
