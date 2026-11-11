@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { config } from "@/lib/config";
-import { syncCharacters } from "@/lib/claims";
-import { upsertUser } from "@/lib/repo";
-import { signedInRedirect } from "@/lib/auth-cookies";
+import { finishSignIn } from "@/lib/auth-cookies";
 
 /**
  * Local testing only (DEV_LOGIN=1, never in production): signs in as any BattleTag that "owns" the
@@ -32,7 +30,5 @@ export async function POST(req: NextRequest) {
       };
     });
 
-  const userId = await upsertUser(`dev:${battletag.toLowerCase()}`, battletag);
-  await syncCharacters(userId, characters);
-  return signedInRedirect(userId);
+  return finishSignIn(`dev:${battletag.toLowerCase()}`, battletag, characters);
 }

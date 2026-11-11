@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 import type { NextRequest } from "next/server";
 import { exchangeCode, fetchAccount, fetchCharacters } from "@/lib/bnet";
-import { syncCharacters } from "@/lib/claims";
-import { upsertUser } from "@/lib/repo";
-import { STATE_COOKIE, loginError, signedInRedirect } from "@/lib/auth-cookies";
+import { STATE_COOKIE, finishSignIn, loginError } from "@/lib/auth-cookies";
 
 function sameState(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -20,14 +18,17 @@ export async function GET(req: NextRequest) {
   const expected = req.cookies.get(STATE_COOKIE)?.value;
   if (!code || !state || !expected || !sameState(state, expected)) return loginError("state");
 
-  try {
-    const accessToken = await exchangeCode(code);
-    const [account, characters] = await Promise.all([fetchAccount(accessToken), fetchCharacters(accessToken)]);
-    const userId = await upsertUser(account.id, account.battletag);
-    await syncCharacters(userId, characters);
-    return await signedInRedirect(userId);
-  } catch (err) {
+  const bnet = await fetchFromBattleNet(code).catch((err) => {
     console.error("Battle.net sign-in failed", err);
-    return loginError("bnet");
-  }
+    return null;
+  });
+  if (!bnet) return loginError("bnet");
+
+  return finishSignIn(bnet.account.id, bnet.account.battletag, bnet.characters);
+}
+
+async function fetchFromBattleNet(code: string) {
+  const accessToken = await exchangeCode(code);
+  const [account, characters] = await Promise.all([fetchAccount(accessToken), fetchCharacters(accessToken)]);
+  return { account, characters };
 }

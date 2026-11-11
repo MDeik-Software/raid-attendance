@@ -6,6 +6,7 @@ const ERRORS: Record<string, string> = {
   denied: "Battle.net sign-in was cancelled.",
   state: "The sign-in link expired. Try again.",
   bnet: "Battle.net did not answer as expected. Try again in a minute.",
+  db: "Battle.net sign-in worked, but the app could not reach its database. Try again in a minute; if it keeps failing, the server's database settings need checking.",
   "not-configured": "Battle.net sign-in is not set up on this server yet (BNET_CLIENT_ID / BNET_CLIENT_SECRET).",
 };
 
