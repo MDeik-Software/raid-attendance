@@ -1,0 +1,16 @@
+name: raid-roster
+
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    ports:
+      - "3020:3020"
+    volumes:
+      - roster-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  roster-data:
