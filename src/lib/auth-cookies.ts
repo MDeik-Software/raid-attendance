@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import type { BnetCharacter } from "./bnet";
-import { syncCharacters } from "./claims";
+import { hasActiveCharacter, syncAccountCharacters } from "./claims";
 import { config } from "./config";
 import { upsertUser } from "./repo";
 import { createSession, sessionCookie } from "./session";
@@ -14,9 +14,9 @@ export function appUrl(path: string): URL {
 }
 
 /**
- * Saves the user and their character claims, starts a session and sends them to the grid
- * (303 so a POST turns into a GET). Database failures get their own error, so they are not
- * mistaken for Battle.net problems.
+ * Saves the user and the characters on their account, starts a session and sends them on (303 so a POST
+ * turns into a GET): to the grid, or to the character picker while they have no active character yet.
+ * Database failures get their own error, so they are not mistaken for Battle.net problems.
  */
 export async function finishSignIn(
   bnetId: string,
@@ -25,9 +25,10 @@ export async function finishSignIn(
 ): Promise<NextResponse> {
   try {
     const userId = await upsertUser(bnetId, battletag);
-    await syncCharacters(userId, characters);
+    await syncAccountCharacters(userId, characters);
+    const next = (await hasActiveCharacter(userId)) ? "/" : "/characters";
     const { token, expires } = await createSession(userId);
-    const res = NextResponse.redirect(appUrl("/"), 303);
+    const res = NextResponse.redirect(appUrl(next), 303);
     res.cookies.set(sessionCookie(token, expires));
     res.cookies.set({ name: STATE_COOKIE, value: "", path: "/api/auth", maxAge: 0 });
     return res;

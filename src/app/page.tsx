@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
-import { AvailabilityGrid, type GridColumn, type GridRow } from "@/components/AvailabilityGrid";
+import { AvailabilityGrid, UnclaimedMark, type GridColumn, type GridRow } from "@/components/AvailabilityGrid";
 import { config } from "@/lib/config";
 import { RESET_WEEKDAY, WEEKDAYS, raidDates, shortLabel, todayIn, weekday } from "@/lib/dates";
-import { defaultStatus, getSettings, listAvailability, listRoster } from "@/lib/repo";
+import { defaultStatus, getSettings, listAvailability, listTeam } from "@/lib/repo";
 import { getCurrentUser } from "@/lib/session";
 import type { Status } from "@/lib/status";
 
@@ -12,19 +12,27 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const roster = await listRoster();
-  const mine = roster.filter((c) => c.ownerUserId === user.id);
+  const settings = await getSettings();
+  const team = await listTeam(settings);
+  const mine = team.filter((m) => m.ownerUserId === user.id);
 
-  if (!user.isAdmin && mine.length === 0) {
+  if (team.length === 0) {
     return (
       <>
         <AppHeader user={user} active="grid" />
         <main className="mx-auto max-w-lg p-6 text-sm text-muted">
-          <h1 className="mb-2 text-lg font-semibold text-foreground">None of your characters are on the roster</h1>
-          <p>
-            Your Battle.net account ({user.battletag}) has no character whose name matches the roster. If you
-            should be on it, ask an officer to add your character, then sign out and sign in again.
-          </p>
+          <h1 className="mb-2 text-lg font-semibold text-foreground">The raid team is not set up yet</h1>
+          {user.isAdmin ? (
+            <p>
+              Fetch the guild and pick the raid team on{" "}
+              <Link href="/admin" className="text-accent hover:underline">
+                Roster &amp; settings
+              </Link>
+              .
+            </p>
+          ) : (
+            <p>Check back once an officer has picked the raid team.</p>
+          )}
         </main>
       </>
     );
@@ -32,7 +40,6 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
 
   const { past } = await searchParams;
   const showPast = past === "1";
-  const settings = await getSettings();
   const today = todayIn(config.timeZone);
   const allDates = raidDates(settings.startDate, settings.endDate, settings.raidDays);
   const dates = showPast ? allDates : allDates.filter((d) => d >= today);
@@ -41,7 +48,7 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
   const answered = new Map<string, Status>();
   if (dates.length > 0) {
     for (const a of await listAvailability(dates[0], dates[dates.length - 1])) {
-      answered.set(`${a.characterId}|${a.date}`, a.status);
+      answered.set(`${a.memberId}|${a.date}`, a.status);
     }
   }
 
@@ -54,13 +61,14 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
     today: date === today,
   }));
 
-  const rows: GridRow[] = roster.map((c) => ({
-    id: c.id,
-    name: c.name,
-    classId: c.classId,
-    groupNo: c.groupNo,
-    mine: c.ownerUserId === user.id,
-    editable: user.isAdmin || c.ownerUserId === user.id,
+  const rows: GridRow[] = team.map((m) => ({
+    id: m.id,
+    name: m.name,
+    classId: m.classId,
+    groupNo: m.groupNo,
+    mine: m.ownerUserId === user.id,
+    claimed: m.ownerUserId != null,
+    editable: user.isAdmin || m.ownerUserId === user.id,
   }));
 
   const cells: Record<string, Status> = {};
@@ -75,12 +83,24 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
     <>
       <AppHeader user={user} active="grid" />
       <main className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
+        {!user.isAdmin && mine.length === 0 && (
+          <p className="rounded border border-amber-900 bg-amber-950/50 px-3 py-2 text-sm text-amber-100">
+            You have not claimed a raid team character yet, so you cannot mark nights. Tick the characters you raid on
+            under{" "}
+            <Link href="/characters" className="font-medium text-accent hover:underline">
+              My characters
+            </Link>
+            ; if yours is not on the team, ask an officer.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
-          <span>
-            {user.isAdmin
-              ? "You can change every row."
-              : `Click your ${mine.length === 1 ? "row" : "rows"} to switch between yes, no and -.`}
-          </span>
+          {(user.isAdmin || mine.length > 0) && (
+            <span>
+              {user.isAdmin
+                ? "You can change every row."
+                : `Click your ${mine.length === 1 ? "row" : "rows"} to switch between yes, no and -.`}
+            </span>
+          )}
           <Legend />
           {hasPast && (
             <Link href={showPast ? "/" : "/?past=1"} className="ml-auto text-accent hover:underline">
@@ -92,12 +112,7 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
         {columns.length === 0 ? (
           <p className="text-sm text-muted">No raid nights left in the schedule.</p>
         ) : (
-          <AvailabilityGrid
-            columns={columns}
-            rows={rows}
-            initialCells={cells}
-            canEditPast={user.isAdmin}
-          />
+          <AvailabilityGrid columns={columns} rows={rows} initialCells={cells} canEditPast={user.isAdmin} />
         )}
       </main>
     </>
@@ -106,11 +121,13 @@ export default async function GridPage({ searchParams }: PageProps<"/">) {
 
 function Legend() {
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex flex-wrap items-center gap-2">
       <span className="cell-yes rounded px-2 py-0.5 text-xs">yes</span>
       <span className="cell-no rounded px-2 py-0.5 text-xs">no</span>
       <span className="cell-unset rounded px-2 py-0.5 text-xs">-</span>
       <span className="text-xs">not set yet</span>
+      <UnclaimedMark />
+      <span className="text-xs">no player has claimed the character</span>
     </span>
   );
 }

@@ -56,6 +56,52 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+
+  // The roster now comes from the Battle.net guild roster, and players claim characters by ticking them.
+  // The hand-made roster, its name-based claims and its answers are dropped: the guild import starts fresh.
+  `
+  DROP TABLE IF EXISTS availability;
+  DROP TABLE IF EXISTS roster_characters;
+
+  CREATE TABLE IF NOT EXISTS guild_members (
+    id            INTEGER PRIMARY KEY,
+    realm_slug    TEXT NOT NULL,
+    character_id  INTEGER NOT NULL,
+    name          TEXT NOT NULL,
+    class_id      INTEGER NOT NULL,
+    level         INTEGER NOT NULL,
+    guild_rank    INTEGER NOT NULL,
+    in_guild      INTEGER NOT NULL DEFAULT 1,
+    -- NULL: on the team when the rank is a raid rank and the level is max; 1: always on; 0: always off.
+    team_override INTEGER,
+    group_no      INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (realm_slug, character_id)
+  );
+
+  -- The characters on each player's Battle.net account, refreshed at every sign-in. A character belongs to
+  -- one account at a time; "active" means the player raids on it, which claims its raid team row.
+  CREATE TABLE IF NOT EXISTS user_characters (
+    realm_slug   TEXT NOT NULL,
+    character_id INTEGER NOT NULL,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    realm_name   TEXT NOT NULL,
+    class_id     INTEGER,
+    level        INTEGER NOT NULL,
+    active       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (realm_slug, character_id)
+  );
+  CREATE INDEX IF NOT EXISTS ix_user_characters_user ON user_characters(user_id);
+
+  CREATE TABLE IF NOT EXISTS availability (
+    member_id          INTEGER NOT NULL REFERENCES guild_members(id) ON DELETE CASCADE,
+    date               TEXT NOT NULL,
+    status             TEXT NOT NULL CHECK (status IN ('yes', 'no', 'unset')),
+    updated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at         TEXT NOT NULL,
+    PRIMARY KEY (member_id, date)
+  );
+  `,
 ];
 
 async function open(): Promise<Client> {

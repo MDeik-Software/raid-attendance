@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CurrentUser } from "@/lib/session";
 
-export function AppHeader({ user, active }: { user: CurrentUser; active: "grid" | "admin" }) {
+export function AppHeader({ user, active }: { user: CurrentUser; active: "grid" | "characters" | "admin" }) {
   const tab = (isActive: boolean) =>
     `rounded px-3 py-1.5 text-sm ${isActive ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`;
 
@@ -11,6 +11,9 @@ export function AppHeader({ user, active }: { user: CurrentUser; active: "grid" 
       <nav className="flex gap-1">
         <Link href="/" className={tab(active === "grid")}>
           Availability
+        </Link>
+        <Link href="/characters" className={tab(active === "characters")}>
+          My characters
         </Link>
         {user.isAdmin && (
           <Link href="/admin" className={tab(active === "admin")}>

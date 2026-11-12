@@ -20,8 +20,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6">
         <h1 className="text-xl font-semibold">Raid Roster</h1>
         <p className="mt-2 text-sm text-muted">
-          Sign in with Battle.net to mark which raid nights you can make. You can change the rows of the roster
-          characters on your own account.
+          Sign in with Battle.net to mark which raid nights you can make. You then pick the characters you raid on,
+          and can change their rows on the grid.
         </p>
 
         {message && <p className="mt-4 rounded bg-red-950/60 px-3 py-2 text-sm text-red-200">{message}</p>}

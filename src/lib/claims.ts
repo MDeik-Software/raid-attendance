@@ -1,63 +1,78 @@
 import "server-only";
 import type { InStatement } from "@libsql/client";
 import type { BnetCharacter } from "./bnet";
-import { all, batch } from "./db";
-import { normaliseName } from "./repo";
+import { all, batch, first } from "./db";
 
-type Row = {
-  id: number;
+/** A character on the player's Battle.net account, as stored at their last sign-in. */
+export type AccountCharacter = {
+  realmSlug: string;
+  characterId: number;
   name: string;
-  realmSlug: string | null;
-  bnetCharacterId: number | null;
-  ownerUserId: number | null;
+  realmName: string;
+  classId: number | null;
+  level: number;
+  active: boolean;
 };
 
+export function characterKey(c: { realmSlug: string; characterId: number }): string {
+  return `${c.realmSlug}:${c.characterId}`;
+}
+
 /**
- * Gives the user the roster rows that belong to characters on their Battle.net account.
- *
- * A row that was claimed before matches only the exact character (realm + Blizzard id) that claimed it,
- * so a same-named character on another realm cannot take it over. An unclaimed row matches by name and
- * is then bound to that character. Rows the user owned but whose character left the account are released.
- * Returns the ids of the rows the user now owns.
+ * Stores the characters Battle.net reports for the account. A character moves with its owner: if another
+ * player had it before, it is theirs no more and starts inactive here. Characters that left the account are
+ * forgotten, which also releases the raid team rows they claimed.
  */
-export async function syncCharacters(userId: number, characters: BnetCharacter[]): Promise<number[]> {
-  const roster = await all<Row>(
-    `SELECT id, name, realm_slug AS realmSlug, bnet_character_id AS bnetCharacterId,
-            owner_user_id AS ownerUserId
-     FROM roster_characters`,
+export async function syncAccountCharacters(userId: number, characters: BnetCharacter[]) {
+  const current = new Set(characters.map((c) => `${c.realmSlug}:${c.id}`));
+  const stored = await all<{ realmSlug: string; characterId: number }>(
+    "SELECT realm_slug AS realmSlug, character_id AS characterId FROM user_characters WHERE user_id = ?",
+    [userId],
   );
 
-  const byBinding = new Map<string, Row>();
-  const unclaimedByName = new Map<string, Row>();
-  for (const row of roster) {
-    if (row.bnetCharacterId != null) byBinding.set(`${row.realmSlug}:${row.bnetCharacterId}`, row);
-    else unclaimedByName.set(normaliseName(row.name), row);
-  }
-
-  const writes: InStatement[] = [];
-  const owned = new Set<number>();
+  const writes: InStatement[] = stored
+    .filter((c) => !current.has(characterKey(c)))
+    .map((c) => ({
+      sql: "DELETE FROM user_characters WHERE realm_slug = ? AND character_id = ?",
+      args: [c.realmSlug, c.characterId],
+    }));
 
   for (const c of characters) {
-    const key = normaliseName(c.name);
-    const row = byBinding.get(`${c.realmSlug}:${c.id}`) ?? unclaimedByName.get(key);
-    if (!row || owned.has(row.id)) continue;
-    owned.add(row.id);
-    unclaimedByName.delete(key);
     writes.push({
-      // The bnet_character_id check stops a sign-in from overwriting a claim another sign-in made meanwhile.
-      sql: `UPDATE roster_characters
-            SET realm_slug = ?, bnet_character_id = ?, owner_user_id = ?, class_id = COALESCE(?, class_id)
-            WHERE id = ? AND (bnet_character_id IS NULL OR (realm_slug = ? AND bnet_character_id = ?))`,
-      args: [c.realmSlug, c.id, userId, c.classId, row.id, c.realmSlug, c.id],
+      sql: `INSERT INTO user_characters (realm_slug, character_id, user_id, name, realm_name, class_id, level, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+            ON CONFLICT(realm_slug, character_id) DO UPDATE SET
+              active = CASE WHEN user_characters.user_id = excluded.user_id THEN user_characters.active ELSE 0 END,
+              user_id = excluded.user_id, name = excluded.name, realm_name = excluded.realm_name,
+              class_id = excluded.class_id, level = excluded.level`,
+      args: [c.realmSlug, c.id, userId, c.name, c.realmName, c.classId, c.level],
     });
   }
 
-  for (const row of roster) {
-    if (row.ownerUserId === userId && !owned.has(row.id)) {
-      writes.push({ sql: "UPDATE roster_characters SET owner_user_id = NULL WHERE id = ?", args: [row.id] });
-    }
-  }
-
   await batch(writes);
-  return [...owned];
+}
+
+export async function listAccountCharacters(userId: number): Promise<AccountCharacter[]> {
+  const rows = await all<Omit<AccountCharacter, "active"> & { active: number }>(
+    `SELECT realm_slug AS realmSlug, character_id AS characterId, name, realm_name AS realmName,
+            class_id AS classId, level, active
+     FROM user_characters WHERE user_id = ?`,
+    [userId],
+  );
+  return rows.map((r) => ({ ...r, active: r.active === 1 }));
+}
+
+export async function hasActiveCharacter(userId: number): Promise<boolean> {
+  return Boolean(await first("SELECT 1 AS yes FROM user_characters WHERE user_id = ? AND active = 1 LIMIT 1", [userId]));
+}
+
+/** Marks exactly the given characters (by characterKey) active; only max-level ones on the account count. */
+export async function saveActiveCharacters(userId: number, activeKeys: Set<string>, maxLevel: number) {
+  const characters = await listAccountCharacters(userId);
+  await batch(
+    characters.map((c) => ({
+      sql: "UPDATE user_characters SET active = ? WHERE realm_slug = ? AND character_id = ? AND user_id = ?",
+      args: [activeKeys.has(characterKey(c)) && c.level >= maxLevel ? 1 : 0, c.realmSlug, c.characterId, userId],
+    })),
+  );
 }

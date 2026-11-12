@@ -21,8 +21,24 @@ export type GridRow = {
   classId: number;
   groupNo: number;
   mine: boolean;
+  /** Some player has ticked this character as theirs. */
+  claimed: boolean;
   editable: boolean;
 };
+
+/** The "!" next to a raid team character that no player has claimed yet. */
+export function UnclaimedMark() {
+  return (
+    <span
+      role="img"
+      aria-label="Not claimed"
+      title="Not claimed: no player has ticked this character under My characters yet"
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold leading-none text-black"
+    >
+      !
+    </span>
+  );
+}
 
 const WEEK_LINE = "border-l-2 border-l-[#6b6b80]";
 const BLOCK_LINE = "border-t-2 border-t-[#55556a]";
@@ -103,6 +119,11 @@ export function AvailabilityGrid({
                     title={cls.name}
                   >
                     {row.name}
+                    {!row.claimed && (
+                      <span className="ml-1.5 inline-block align-[-2px]">
+                        <UnclaimedMark />
+                      </span>
+                    )}
                     {row.mine && (
                       <span className="ml-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white/80">
                         you

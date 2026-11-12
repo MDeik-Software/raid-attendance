@@ -1,33 +1,49 @@
 # Raid Roster
 
-Raid night availability for the roster. Players sign in with Battle.net and mark each raid night
-**yes**, **no** or **-** for their own characters; officers can change everything, manage the roster
-and set the schedule.
+Raid night availability for the raid team. Officers build the team from the guild's Battle.net roster;
+players sign in with Battle.net, tick the characters they raid on, and mark each raid night **yes**, **no**
+or **-** for them. Officers can change everything and set the schedule.
 
 Next.js 16 (App Router, server actions) on SQLite through `@libsql/client`: a hosted [Turso](https://turso.tech)
 database in production (required on Vercel), or a plain local file for development and Docker.
 
-## How players are matched to rows
+## Building the raid team (officers)
+
+On *Roster & settings*:
+
+1. **Guild:** pick the region and realm, enter the guild name and *Fetch guild*. The app reads the guild
+   roster from Blizzard's API with its own client credentials. *Fetch again* any time to pick up new members,
+   level-ups and rank changes. Fetching a **different** guild starts over: the old team and all answers go.
+2. **Ranks:** Blizzard only reports rank numbers (0 is the Guild Master), so name them if that helps. Tick the
+   ranks the raid team comes from and set the max level (90 in Midnight).
+3. **Raid team:** every max-level member of a ticked rank is on the team. Untick anyone who is not; the grid
+   shows exactly the ticked characters. Only choices that differ from the rank rule are stored, so promotions
+   into a raid rank join the team on the next fetch. The block number groups rows on the grid.
+
+Members who leave the guild drop off at the next fetch, unless an officer explicitly kept them on the team.
+
+## Claiming characters (players)
 
 On every sign-in the app asks Blizzard's Profile API (`/profile/user/wow`, scope `wow.profile`) for the
-characters on the player's Battle.net account.
+characters on the player's Battle.net account, in the guild's region.
 
-- A roster row nobody has claimed yet matches a character **by name** (case-insensitive, accents count).
-  The first match binds the row to that character's realm and Blizzard id.
-- A claimed row matches **only** that exact character from then on, so a same-named character on another
-  realm cannot take it over. Renaming the character in-game keeps the claim.
-- If the character leaves the account, the next sign-in releases it.
-- Officers can reset a claim on the *Roster & settings* page.
+- *My characters* lists the player's max-level characters. Ticking one marks it active; an active raid team
+  character is **claimed**: the player can mark nights on its row. Players with no active character land on
+  *My characters* after signing in.
+- Claims follow the exact character (realm and Blizzard id), so names never collide. A character belongs to
+  one account: if it moves to another account, the new owner's sign-in takes it over, and the old owner's
+  claim ends when it leaves their account.
+- Raid team characters nobody has claimed show a **!** next to their name on the grid.
 
 Players only see character names. BattleTags are shown to officers only; Battle.net never shares emails.
 
 ## Rules
 
-- Players can change their own rows from today on. Past nights are locked for them (officers can still edit).
+- Players can change the rows they claimed from today on. Past nights are locked for them (officers can still edit).
 - Cells nobody has answered show the schedule default: nights ticked under *Nights that start as yes*
   show **yes**, the rest show **-**. Changing those defaults changes every unanswered cell.
 - Clicking a cell walks yes → no → - → yes.
-- A thick vertical line marks Wednesday, the EU weekly reset; a thick horizontal line separates roster blocks.
+- A thick vertical line marks Wednesday, the EU weekly reset; a thick horizontal line separates team blocks.
 
 ## Setup
 
@@ -38,8 +54,8 @@ Players only see character names. BattleTags are shown to officers only; Battle.
    Quote the BattleTags (`ADMIN_BATTLETAGS="Name#1234,Other#5678"`): an unquoted `#` starts a comment.
 
 The first start creates the tables (in Turso, or in `data/raid-roster.db` when `TURSO_DATABASE_URL` is empty)
-and seeds the 23-character roster and the schedule (Wed, Thu, Sun, Mon, Tue from 2026-11-12 to 2027-01-12;
-Thursdays and Mondays start as yes).
+and seeds the schedule (Wed, Thu, Sun, Mon, Tue from 2026-11-12 to 2027-01-12; Thursdays and Mondays start
+as yes). The team comes from the guild import above.
 
 ## Deploy on Vercel (free Hobby plan)
 
@@ -67,8 +83,10 @@ npm run dev
 ```
 
 Open <http://localhost:3020>. With `DEV_LOGIN=1` the sign-in page also has a local test form: enter any
-BattleTag and the character names it should own. Those claims are bound to the realm `dev`; reset them
-(or delete `data/`) before real players sign in.
+BattleTag and the character names its account should hold. A name that matches an imported guild member
+(`Name`, or `Name-realm` to pick the realm) becomes that exact character, so test sign-ins can claim real
+team rows; other names become max-level characters on the realm `dev`. Use it only against a local
+database, never the live one.
 
 ## Run with Docker
 
@@ -86,7 +104,7 @@ with `https://`.
 |---|---|---|
 | `APP_URL` | `http://localhost:3020` | Public address; builds the Battle.net redirect URL |
 | `BNET_CLIENT_ID`, `BNET_CLIENT_SECRET` | – | Battle.net API client |
-| `BNET_REGION` | `eu` | Region of the characters (`eu`, `us`, `kr`, `tw`) |
+| `BNET_REGION` | `eu` | Region of players' characters until a guild is imported; then the guild's region counts |
 | `ADMIN_BATTLETAGS` | – | Comma-separated BattleTags with full access |
 | `APP_TIMEZONE` | `Europe/Athens` | When a night counts as past |
 | `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | – | Turso database; when empty, a local file is used |

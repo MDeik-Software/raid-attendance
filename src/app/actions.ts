@@ -2,36 +2,57 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { CLASSES } from "@/lib/classes";
+import { fetchGuildRoster, fetchRealms, type Realm } from "@/lib/bnet";
+import { saveActiveCharacters } from "@/lib/claims";
 import { config } from "@/lib/config";
 import { isIsoDate, rangeIsValid, todayIn, weekday } from "@/lib/dates";
+import { isRegion, realmLabel, REGION_NAMES } from "@/lib/regions";
 import * as repo from "@/lib/repo";
 import { getCurrentUser } from "@/lib/session";
 import { isStatus, type Status } from "@/lib/status";
 
 type Result = { ok: true } | { ok: false; error: string };
 
-/** Sets one cell. Players may change their own characters from today on; admins may change anything. */
-export async function setAvailabilityAction(characterId: number, date: string, status: Status): Promise<Result> {
+function revalidateAll() {
+  revalidatePath("/");
+  revalidatePath("/characters");
+  revalidatePath("/admin");
+}
+
+/** Sets one cell. Players may change the team characters they claimed, from today on; admins anything. */
+export async function setAvailabilityAction(memberId: number, date: string, status: Status): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Your session has ended. Sign in again." };
-  if (!Number.isInteger(characterId) || !isIsoDate(date) || !isStatus(status)) {
+  if (!Number.isInteger(memberId) || !isIsoDate(date) || !isStatus(status)) {
     return { ok: false, error: "That change was not valid." };
   }
 
-  const [settings, character] = await Promise.all([repo.getSettings(), repo.getRosterCharacter(characterId)]);
+  const [settings, member] = await Promise.all([repo.getSettings(), repo.getMember(memberId)]);
   const isRaidDate =
     date >= settings.startDate && date <= settings.endDate && settings.raidDays.includes(weekday(date));
   if (!isRaidDate) return { ok: false, error: "That date is not a raid night." };
-  if (!character) return { ok: false, error: "That character is no longer on the roster." };
+  if (!member || !repo.isOnTeam(member, settings)) return { ok: false, error: "That character is not on the raid team." };
 
   if (!user.isAdmin) {
-    if (character.ownerUserId !== user.id) return { ok: false, error: "You can only change your own characters." };
+    if (member.ownerUserId !== user.id) return { ok: false, error: "You can only change characters you claimed." };
     if (date < todayIn(config.timeZone)) return { ok: false, error: "Past raid nights are locked." };
   }
 
-  await repo.setAvailability(characterId, date, status, user.id);
+  await repo.setAvailability(memberId, date, status, user.id);
   return { ok: true };
+}
+
+// ---------- players ----------
+
+/** Saves which of the player's characters are active; active raid team characters become theirs to edit. */
+export async function saveActiveCharactersAction(form: FormData) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const settings = await repo.getSettings();
+  const keys = new Set(form.getAll("active").map(String));
+  await saveActiveCharacters(user.id, keys, settings.maxLevel);
+  revalidateAll();
+  redirect("/");
 }
 
 // ---------- admin ----------
@@ -47,69 +68,95 @@ function fail(message: string): never {
 }
 
 function done(message: string): never {
-  revalidatePath("/admin");
-  revalidatePath("/");
+  revalidateAll();
   redirect(`/admin?ok=${encodeURIComponent(message)}`);
 }
 
-function readCharacterFields(form: FormData) {
-  const name = String(form.get("name") ?? "").trim();
-  const classId = Number(form.get("classId"));
-  const groupNo = Number(form.get("groupNo"));
-  if (!name || name.length > 24) fail("Enter a character name of up to 24 characters.");
-  if (!CLASSES.some((c) => c.id === classId)) fail("Pick a class.");
-  if (!Number.isInteger(groupNo) || groupNo < 1 || groupNo > 9) fail("Block must be a number from 1 to 9.");
-  return { name, classId, groupNo };
+/** Realm list for the guild form when the officer switches region. */
+export async function listRealmsAction(region: string): Promise<{ ok: true; realms: Realm[] } | { ok: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user?.isAdmin) return { ok: false, error: "Only officers can do that." };
+  if (!isRegion(region)) return { ok: false, error: "Unknown region." };
+  try {
+    return { ok: true, realms: await fetchRealms(region) };
+  } catch (err) {
+    console.error("Realm list failed", err);
+    return { ok: false, error: "Battle.net did not send the realm list. Try again in a minute." };
+  }
 }
 
-async function readCharacter(form: FormData): Promise<repo.RosterCharacter> {
-  const id = Number(form.get("id"));
-  const character = Number.isInteger(id) ? await repo.getRosterCharacter(id) : undefined;
-  if (!character) fail("That character is no longer on the roster.");
-  return character;
-}
-
-export async function addCharacterAction(form: FormData) {
+export async function importGuildAction(form: FormData) {
   await requireAdmin();
-  const { name, classId, groupNo } = readCharacterFields(form);
-  if (await repo.nameTaken(name)) fail(`${name} is already on the roster.`);
-  await repo.addCharacter(name, classId, groupNo);
-  done(`Added ${name}.`);
+  const region = String(form.get("region") ?? "");
+  const realmSlug = String(form.get("realmSlug") ?? "");
+  const guildName = String(form.get("guildName") ?? "").trim();
+  if (!isRegion(region)) fail("Pick a region.");
+  if (!/^[\p{L}\p{N}-]+$/u.test(realmSlug)) fail("Pick a realm.");
+  if (!guildName || guildName.length > 24) fail("Enter the guild name (up to 24 characters).");
+
+  const fetched = await Promise.all([
+    fetchRealms(region).catch(() => [] as Realm[]),
+    fetchGuildRoster(region, realmSlug, guildName),
+  ]).catch((err) => {
+    console.error("Guild roster request failed", err);
+    return null;
+  });
+  if (!fetched) fail("Battle.net did not answer. Try again in a minute.");
+
+  const [realms, roster] = fetched;
+  const realmName = realms.find((r) => r.slug === realmSlug)?.name ?? realmLabel(realmSlug);
+  if (!roster || roster.members.length === 0) {
+    fail(`Battle.net knows no guild called "${guildName}" on ${realmName} (${REGION_NAMES[region]}). Check the name and the realm.`);
+  }
+
+  const refreshed = await repo.importGuild({ region, realmSlug, realmName, name: roster.name }, roster.members);
+  done(
+    refreshed
+      ? `Fetched ${roster.members.length} members of ${roster.name} again; the team follows any rank and level changes.`
+      : `Fetched ${roster.members.length} members of ${roster.name}. Now pick the ranks the raid team comes from.`,
+  );
 }
 
-export async function updateCharacterAction(form: FormData) {
+export async function saveRanksAction(form: FormData) {
   await requireAdmin();
-  const { id } = await readCharacter(form);
-  const { name, classId, groupNo } = readCharacterFields(form);
-  if (await repo.nameTaken(name, id)) fail(`${name} is already on the roster.`);
-  await repo.updateCharacter(id, name, classId, groupNo);
-  done(`Saved ${name}.`);
+  const maxLevel = Number(form.get("maxLevel"));
+  if (!Number.isInteger(maxLevel) || maxLevel < 1 || maxLevel > 200) fail("Max level must be a whole number.");
+
+  const ranks = new Set((await repo.listMembers()).map((m) => m.rank));
+  const raidRanks = [...new Set(form.getAll("raidRanks").map(Number))].filter((r) => ranks.has(r)).sort((a, b) => a - b);
+  const rankNames: Record<string, string> = {};
+  for (const rank of ranks) {
+    const name = String(form.get(`rankName_${rank}`) ?? "").trim().slice(0, 24);
+    if (name) rankNames[rank] = name;
+  }
+
+  await repo.saveRanks(raidRanks, rankNames, maxLevel);
+  done(raidRanks.length ? "Ranks saved. Check the raid team below." : "Ranks saved. Pick at least one rank to build the raid team.");
 }
 
-export async function moveCharacterAction(form: FormData) {
+export async function saveTeamAction(form: FormData) {
   await requireAdmin();
-  const { id } = await readCharacter(form);
-  await repo.moveCharacter(id, form.get("direction") === "up" ? "up" : "down");
-  revalidatePath("/admin");
-  revalidatePath("/");
-  redirect("/admin");
+  const [settings, members] = await Promise.all([repo.getSettings(), repo.listMembers()]);
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const onTeam = new Set(form.getAll("onTeam").map(Number));
+
+  const changes: repo.TeamChange[] = [];
+  for (const id of new Set(form.getAll("shown").map(Number))) {
+    const member = byId.get(id);
+    if (!member) continue;
+    const groupNo = Number(form.get(`group_${id}`));
+    if (!Number.isInteger(groupNo) || groupNo < 1 || groupNo > 9) fail(`Block for ${member.name} must be a number from 1 to 9.`);
+    const wanted = onTeam.has(id);
+    // Store only choices that differ from the rank rule, so rank changes keep working for everyone else.
+    changes.push({ id, override: wanted === repo.teamByDefault(member, settings) ? null : wanted, groupNo });
+  }
+
+  await repo.saveTeam(changes);
+  const team = await repo.listTeam(settings);
+  done(`Raid team saved: ${team.length} characters.`);
 }
 
-export async function resetClaimAction(form: FormData) {
-  await requireAdmin();
-  const { id, name } = await readCharacter(form);
-  await repo.resetClaim(id);
-  done(`${name} is unclaimed; the next player who signs in with that character name claims it.`);
-}
-
-export async function removeCharacterAction(form: FormData) {
-  await requireAdmin();
-  const { id, name } = await readCharacter(form);
-  await repo.removeCharacter(id);
-  done(`Removed ${name} and their answers.`);
-}
-
-export async function saveSettingsAction(form: FormData) {
+export async function saveScheduleAction(form: FormData) {
   await requireAdmin();
   const startDate = String(form.get("startDate") ?? "");
   const endDate = String(form.get("endDate") ?? "");
@@ -125,6 +172,6 @@ export async function saveSettingsAction(form: FormData) {
   if (raidDays.length === 0) fail("Pick at least one raid night.");
   const defaultYesDays = [...new Set(days("defaultYesDays"))].filter((d) => raidDays.includes(d));
 
-  await repo.saveSettings({ startDate, endDate, raidDays, defaultYesDays });
-  done("Settings saved.");
+  await repo.saveSchedule({ startDate, endDate, raidDays, defaultYesDays });
+  done("Schedule saved.");
 }
