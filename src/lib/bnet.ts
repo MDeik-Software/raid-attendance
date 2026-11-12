@@ -26,6 +26,13 @@ export type Realm = { slug: string; name: string };
 
 const OAUTH = "https://oauth.battle.net";
 
+/**
+ * Battle.net's own sign-out page. Battle.net keeps people signed in and sends the same account straight back
+ * to the app, so switching to another Battle.net account needs a sign-out there first. Battle.net ignores a
+ * return address outside its own sites, so the app opens this in a new tab.
+ */
+export const BNET_SIGN_OUT_URL = "https://account.battle.net/login/logout";
+
 function apiUrl(region: Region, path: string, namespace: "profile" | "dynamic"): string {
   const locale = region === "eu" ? "en_GB" : "en_US";
   const sep = path.includes("?") ? "&" : "?";

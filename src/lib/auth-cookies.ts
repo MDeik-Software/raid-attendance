@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { anyOnTeam } from "./access";
 import type { BnetCharacter } from "./bnet";
 import { hasActiveCharacter, syncAccountCharacters } from "./claims";
-import { config } from "./config";
+import { config, secureCookies } from "./config";
 import { SIGN_IN_MAX_AGE_MS, refreshGuildIfStale } from "./guild-refresh";
 import { forgetUser, upsertUser } from "./repo";
 import { createSession, isAdminBattletag, sessionCookie } from "./session";
 
 export const STATE_COOKIE = "rr_oauth_state";
+/** The BattleTag a refused sign-in used, kept briefly so the sign-in page can say which account it was. */
+export const REFUSED_COOKIE = "rr_refused";
 
 /** Absolute URL on this app, built from APP_URL so it is right behind a reverse proxy. */
 export function appUrl(path: string): URL {
@@ -32,7 +34,17 @@ export async function finishSignIn(
       await refreshGuildIfStale(SIGN_IN_MAX_AGE_MS);
       if (!(await anyOnTeam(characters))) {
         await forgetUser(bnetId);
-        return loginError("team");
+        const res = loginError("team");
+        res.cookies.set({
+          name: REFUSED_COOKIE,
+          value: battletag,
+          httpOnly: true,
+          sameSite: "lax",
+          secure: secureCookies(),
+          path: "/login",
+          maxAge: 600,
+        });
+        return res;
       }
     }
 
@@ -43,6 +55,7 @@ export async function finishSignIn(
     const res = NextResponse.redirect(appUrl(next), 303);
     res.cookies.set(sessionCookie(token, expires));
     res.cookies.set({ name: STATE_COOKIE, value: "", path: "/api/auth", maxAge: 0 });
+    res.cookies.set({ name: REFUSED_COOKIE, value: "", path: "/login", maxAge: 0 });
     return res;
   } catch (err) {
     console.error("Sign-in could not be saved to the database", err);

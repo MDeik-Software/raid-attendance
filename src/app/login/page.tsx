@@ -1,4 +1,7 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { REFUSED_COOKIE } from "@/lib/auth-cookies";
+import { BNET_SIGN_OUT_URL } from "@/lib/bnet";
 import { bnetConfigured, config } from "@/lib/config";
 import { getCurrentUser } from "@/lib/session";
 
@@ -14,7 +17,17 @@ const ERRORS: Record<string, string> = {
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   if (await getCurrentUser()) redirect("/");
   const { error } = await searchParams;
-  const message = typeof error === "string" ? ERRORS[error] : undefined;
+  const refusedAs = error === "team" ? (await cookies()).get(REFUSED_COOKIE)?.value : undefined;
+  const message = refusedAs
+    ? `Battle.net signed you in as ${refusedAs}, and none of that account's characters are on the raid team. If you raid with us, ask an officer; if you just joined the guild, Battle.net can take a few hours to list you.`
+    : typeof error === "string"
+      ? ERRORS[error]
+      : undefined;
+  const signOutLink = (
+    <a href={BNET_SIGN_OUT_URL} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+      Sign out of Battle.net
+    </a>
+  );
 
   return (
     <main className="flex flex-1 items-center justify-center p-4">
@@ -27,13 +40,31 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
         {message && <p className="mt-4 rounded bg-red-950/60 px-3 py-2 text-sm text-red-200">{message}</p>}
 
+        {error === "team" && bnetConfigured() && (
+          <div className="mt-4 rounded border border-border px-3 py-2 text-sm text-muted">
+            <p className="font-medium text-foreground">Raid on another Battle.net account?</p>
+            <p className="mt-1">Battle.net keeps you signed in and sends the same account back, so first:</p>
+            <ol className="mt-1 list-decimal space-y-1 pl-5">
+              <li>{signOutLink} (opens in a new tab).</li>
+              <li>Come back to this tab and sign in with the other account.</li>
+            </ol>
+          </div>
+        )}
+
         {bnetConfigured() ? (
-          <a
-            href="/api/auth/login"
-            className="mt-5 flex w-full items-center justify-center rounded bg-accent px-4 py-2.5 font-medium text-white hover:brightness-110"
-          >
-            Sign in with Battle.net
-          </a>
+          <>
+            <a
+              href="/api/auth/login"
+              className="mt-5 flex w-full items-center justify-center rounded bg-accent px-4 py-2.5 font-medium text-white hover:brightness-110"
+            >
+              Sign in with Battle.net
+            </a>
+            {error !== "team" && (
+              <p className="mt-2 text-center text-xs text-muted">
+                Wrong Battle.net account? {signOutLink} first, then sign in here.
+              </p>
+            )}
+          </>
         ) : (
           !message && (
             <p className="mt-4 text-sm text-amber-300">
