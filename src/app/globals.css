@@ -50,3 +50,9 @@ body {
   background: var(--unset);
   color: var(--unset-text);
 }
+
+/* Grid cells are dropdowns styled as the coloured cell; keep the chosen value centred. */
+.cell-select {
+  text-align: center;
+  text-align-last: center;
+}

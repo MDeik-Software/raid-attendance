@@ -101,7 +101,7 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
             <span>
               {user.isAdmin
                 ? "You can change every row."
-                : `Click your ${mine.length === 1 ? "row" : "rows"} to switch between yes, no and -.`}
+                : `Pick yes, no or - in your ${mine.length === 1 ? "row" : "rows"}.`}
             </span>
           )}
           <Legend />

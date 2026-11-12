@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { setAvailabilityAction } from "@/app/actions";
 import { classById } from "@/lib/classes";
-import { NEXT_STATUS, STATUS_LABEL, type Status } from "@/lib/status";
+import { STATUSES, STATUS_LABEL, type Status } from "@/lib/status";
 
 export type GridColumn = {
   date: string;
@@ -60,10 +60,10 @@ export function AvailabilityGrid({
   const [cells, setCells] = useState(initialCells);
   const [error, setError] = useState<string | null>(null);
 
-  function toggle(row: GridRow, column: GridColumn) {
+  function change(row: GridRow, column: GridColumn, next: Status) {
     const key = `${row.id}|${column.date}`;
     const previous = cells[key];
-    const next = NEXT_STATUS[previous];
+    if (next === previous) return;
     setCells((c) => ({ ...c, [key]: next }));
     setError(null);
 
@@ -143,23 +143,35 @@ export function AvailabilityGrid({
                     const status = cells[`${row.id}|${c.date}`];
                     const editable = row.editable && (!c.past || canEditPast);
                     const label = STATUS_LABEL[status];
-                    const cellClass = `cell-${status} flex h-8 w-full min-w-11 items-center justify-center rounded text-xs font-medium`;
+                    const cellClass = `cell-${status} flex h-9 w-full min-w-16 items-center justify-center rounded text-sm font-medium`;
                     return (
                       <td
                         key={c.date}
-                        className={`p-0.5 ${c.weekStart ? WEEK_LINE : ""} ${newBlock ? BLOCK_LINE : ""} ${
+                        className={`p-1 ${c.weekStart ? WEEK_LINE : ""} ${newBlock ? BLOCK_LINE : ""} ${
                           c.past ? "opacity-50" : ""
                         }`}
                       >
                         {editable ? (
-                          <button
-                            type="button"
-                            onClick={() => toggle(row, c)}
-                            aria-label={`${row.name}, ${c.day} ${c.label}: ${label}. Click to change.`}
-                            className={`${cellClass} cursor-pointer hover:brightness-125 focus-visible:outline-2 focus-visible:outline-accent`}
-                          >
-                            {label}
-                          </button>
+                          <div className="relative">
+                            <select
+                              value={status}
+                              onChange={(e) => change(row, c, e.target.value as Status)}
+                              aria-label={`${row.name}, ${c.day} ${c.label}`}
+                              className={`${cellClass} cell-select cursor-pointer appearance-none border-0 pr-3 hover:brightness-125 focus-visible:outline-2 focus-visible:outline-accent`}
+                            >
+                              {STATUSES.map((s) => (
+                                <option key={s} value={s} className="bg-surface text-foreground">
+                                  {STATUS_LABEL[s]}
+                                </option>
+                              ))}
+                            </select>
+                            <span
+                              aria-hidden="true"
+                              className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] opacity-70"
+                            >
+                              ▼
+                            </span>
+                          </div>
                         ) : (
                           <div className={`${cellClass} opacity-80`} aria-label={`${row.name}, ${c.day} ${c.label}: ${label}`}>
                             {label}

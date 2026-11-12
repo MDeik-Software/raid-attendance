@@ -79,7 +79,7 @@ between several). Officers can open any team member's sheet, from the picker or 
 - Players can change the rows they claimed from today on. Past nights are locked for them (officers can still edit).
 - Cells nobody has answered show the schedule default: nights ticked under *Nights that start as yes*
   show **yes**, the rest show **-**. Changing those defaults changes every unanswered cell.
-- Clicking a cell walks yes → no → - → yes.
+- Each editable cell is a dropdown: pick yes, no or -.
 - A thick vertical line marks Wednesday, the EU weekly reset; a thick horizontal line separates team blocks.
 
 ## Setup
