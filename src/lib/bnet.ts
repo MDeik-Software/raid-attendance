@@ -143,6 +143,44 @@ export async function fetchCharacters(accessToken: string, region: Region): Prom
     }));
 }
 
+/** The raw Profile API responses the home page is built from (shapes as documented by Blizzard). */
+export type CharacterData = {
+  summary: Record<string, unknown>;
+  equipment: Record<string, unknown> | null;
+  specializations: Record<string, unknown> | null;
+  statistics: Record<string, unknown> | null;
+  media: Record<string, unknown> | null;
+};
+
+/**
+ * A character's public profile, read with the app's own token. Null when Battle.net does not know the
+ * character (renamed, transferred, deleted, or not logged in since a long time). Parts other than the summary
+ * may be missing; the page shows what there is.
+ */
+export async function fetchCharacterData(region: Region, realmSlug: string, name: string): Promise<CharacterData | null> {
+  const base = `/profile/wow/character/${encodeURIComponent(realmSlug)}/${encodeURIComponent(name.toLocaleLowerCase())}`;
+  const token = await getAppToken();
+  const get = async (path: string) => {
+    const res = await fetch(apiUrl(region, `${base}${path}`, "profile"), {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Battle.net character request ${path || "/"} failed: HTTP ${res.status}`);
+    return (await res.json()) as Record<string, unknown>;
+  };
+
+  const summary = await get("");
+  if (!summary) return null;
+  const [equipment, specializations, statistics, media] = await Promise.all([
+    get("/equipment"),
+    get("/specializations"),
+    get("/statistics"),
+    get("/character-media"),
+  ]);
+  return { summary, equipment, specializations, statistics, media };
+}
+
 // Realm lists hardly ever change; keep each region's list for a day.
 const realmCache = new Map<Region, { realms: Realm[]; expiresAt: number }>();
 

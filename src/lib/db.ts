@@ -102,6 +102,18 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (member_id, date)
   );
   `,
+
+  // Character sheets for the home page, cached from Battle.net's Profile API. data is the app's own summary
+  // of the character as JSON, or 'null' when Battle.net did not know the character at fetched_at.
+  `
+  CREATE TABLE IF NOT EXISTS character_profiles (
+    realm_slug   TEXT NOT NULL,
+    character_id INTEGER NOT NULL,
+    fetched_at   TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    PRIMARY KEY (realm_slug, character_id)
+  );
+  `,
 ];
 
 async function open(): Promise<Client> {

@@ -1,15 +1,24 @@
 import Link from "next/link";
 import type { CurrentUser } from "@/lib/session";
 
-export function AppHeader({ user, active }: { user: CurrentUser; active: "grid" | "characters" | "admin" }) {
+export function AppHeader({
+  user,
+  active,
+}: {
+  user: CurrentUser;
+  active: "home" | "grid" | "characters" | "admin";
+}) {
   const tab = (isActive: boolean) =>
     `rounded px-3 py-1.5 text-sm ${isActive ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`;
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2">
       <span className="mr-2 font-semibold tracking-wide">Raid Roster</span>
-      <nav className="flex gap-1">
-        <Link href="/" className={tab(active === "grid")}>
+      <nav className="flex flex-wrap gap-1">
+        <Link href="/" className={tab(active === "home")}>
+          Home
+        </Link>
+        <Link href="/availability" className={tab(active === "grid")}>
           Availability
         </Link>
         <Link href="/characters" className={tab(active === "characters")}>

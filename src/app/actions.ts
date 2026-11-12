@@ -16,6 +16,7 @@ type Result = { ok: true } | { ok: false; error: string };
 
 function revalidateAll() {
   revalidatePath("/");
+  revalidatePath("/availability");
   revalidatePath("/characters");
   revalidatePath("/admin");
 }

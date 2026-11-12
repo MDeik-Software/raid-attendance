@@ -54,6 +54,21 @@ characters on the player's Battle.net account, in the guild's region.
 
 Players only see character names. BattleTags are shown to officers only; Battle.net never shares emails.
 
+## Home page
+
+After signing in, players land on a character sheet for their claimed raid team character (chips switch
+between several). Officers can open any team member's sheet, from the picker or by clicking a name on the grid.
+
+- **Gear, stats, talents** come from Blizzard's Profile API with the app's own credentials, cached for
+  30 minutes. Blizzard updates a character after it logs out in-game.
+- **Raid readiness** flags missing enchants, empty gem sockets, slots 10 or more item levels below the
+  character's average, and an unanswered next raid night; it also shows tier set bonuses and the item level
+  against the team average. Which slots take an enchant is judged from the team's own gear (a slot counts when
+  most of the team has it enchanted), so it follows the game without a hand-kept list. Team sheets refresh in
+  the background every 6 hours.
+- **Run Droptimizer** opens Raidbots in a new tab with the character filled in; the sim runs on the player's
+  own Raidbots account. Raidbots has no public API for starting sims.
+
 ## Rules
 
 - Players can change the rows they claimed from today on. Past nights are locked for them (officers can still edit).

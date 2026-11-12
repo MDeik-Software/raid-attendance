@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { setAvailabilityAction } from "@/app/actions";
 import { classById } from "@/lib/classes";
@@ -24,6 +25,8 @@ export type GridRow = {
   /** Some player has ticked this character as theirs. */
   claimed: boolean;
   editable: boolean;
+  /** The name links to the character's sheet on the home page (own characters, or any for officers). */
+  viewable: boolean;
 };
 
 /** The "!" next to a raid team character that no player has claimed yet. */
@@ -118,7 +121,13 @@ export function AvailabilityGrid({
                     }}
                     title={cls.name}
                   >
-                    {row.name}
+                    {row.viewable ? (
+                      <Link href={`/?c=${row.id}`} className="hover:underline" title={`${row.name}'s character sheet`}>
+                        {row.name}
+                      </Link>
+                    ) : (
+                      row.name
+                    )}
                     {!row.claimed && (
                       <span className="ml-1.5 inline-block align-[-2px]">
                         <UnclaimedMark />
