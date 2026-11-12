@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { after } from "next/server";
 import { AppHeader } from "@/components/AppHeader";
-import { CharacterSheet, ago } from "@/components/CharacterSheet";
+import { CharacterSheet } from "@/components/CharacterSheet";
 import { CharacterPicker } from "@/components/HomeControls";
 import { requireRosterAccess } from "@/lib/access";
 import { classById } from "@/lib/classes";
 import { config } from "@/lib/config";
 import { WEEKDAYS, raidDates, shortLabel, todayIn, weekday } from "@/lib/dates";
+import { getDroptimizer } from "@/lib/droptimizer";
 import { BROWSING_MAX_AGE_MS, refreshGuildIfStale } from "@/lib/guild-refresh";
 import {
   TEAM_PROFILE_MAX_AGE_MS,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/profile";
 import { enchantSlots, readiness, type NextNight } from "@/lib/readiness";
 import { defaultStatus, getSettings, listAvailability, listTeam, type Member, type Settings } from "@/lib/repo";
+import { ago } from "@/lib/time";
 
 /** Team average item level needs a few sheets before it means anything. */
 const MIN_PROFILES_FOR_AVERAGE = 3;
@@ -76,10 +78,11 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const wanted = Number((await searchParams).c);
   const member = options.find((m) => m.id === wanted) ?? mine[0] ?? options[0];
 
-  const [loaded, cached, night] = await Promise.all([
+  const [loaded, cached, night, droptimizer] = await Promise.all([
     loadProfile(member, region),
     cachedProfiles(team),
     nextNight(member, settings),
+    getDroptimizer(member),
   ]);
   after(() => refreshTeamProfiles(team, region, TEAM_PROFILE_MAX_AGE_MS, 8));
 
@@ -117,6 +120,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
         {loaded.profile ? (
           <CharacterSheet
+            memberId={member.id}
+            droptimizer={droptimizer}
             profile={loaded.profile}
             region={region}
             realmSlug={member.realmSlug}

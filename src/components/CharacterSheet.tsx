@@ -1,6 +1,8 @@
 import Image from "next/image";
+import { DroptimizerCard } from "@/components/DroptimizerCard";
 import { CopyButton } from "@/components/HomeControls";
 import { classById } from "@/lib/classes";
+import type { DroptimizerReport } from "@/lib/droptimizer";
 import type { CharacterProfile, ProfileItem } from "@/lib/profile";
 import type { Check, Readiness } from "@/lib/readiness";
 import type { Region } from "@/lib/regions";
@@ -19,15 +21,6 @@ const QUALITY_COLORS: Record<string, string> = {
 
 const LEFT_SLOTS = ["HEAD", "NECK", "SHOULDER", "BACK", "CHEST", "WRIST", "MAIN_HAND", "OFF_HAND"];
 const RIGHT_SLOTS = ["HANDS", "WAIST", "LEGS", "FEET", "FINGER_1", "FINGER_2", "TRINKET_1", "TRINKET_2"];
-
-export function ago(iso: string): string {
-  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000));
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} days ago`;
-}
 
 function itemUrl(item: ProfileItem): string {
   const bonus = item.bonusIds.length ? `?bonus=${item.bonusIds.join(":")}` : "";
@@ -103,13 +96,17 @@ function CheckLine({ check }: { check: Check }) {
 const pct = (v: number | null) => (v == null ? "–" : `${v.toFixed(1)}%`);
 
 export function CharacterSheet({
+  memberId,
   profile,
   region,
   realmSlug,
   readiness,
   teamAverage,
   updated,
+  droptimizer,
 }: {
+  memberId: number;
+  droptimizer: DroptimizerReport | null;
   profile: CharacterProfile;
   region: Region;
   realmSlug: string;
@@ -123,11 +120,6 @@ export function CharacterSheet({
   const fixes = readiness.checks.filter((c) => c.kind === "fix");
   const ordered = [...fixes, ...readiness.checks.filter((c) => c.kind !== "fix")];
   const render = profile.media.main ?? profile.media.inset;
-  const droptimizer = `https://www.raidbots.com/simbot/droptimizer?${new URLSearchParams({
-    region,
-    realm: realmSlug,
-    name: profile.name,
-  })}`;
 
   const slots = (list: string[]) =>
     list
@@ -222,7 +214,7 @@ export function CharacterSheet({
         <div className="rounded-lg border border-border bg-surface px-3 py-1">{slots(RIGHT_SLOTS)}</div>
       </section>
 
-      <section className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
+      <section className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
           <h2 className="font-semibold">Talents</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -247,21 +239,13 @@ export function CharacterSheet({
             <p className="text-sm text-muted">Battle.net did not share the active talent loadout.</p>
           )}
         </div>
-        <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <h2 className="font-semibold">Droptimizer</h2>
-          <p className="text-sm text-muted">
-            Finds the raid drops that would help {profile.name} most. Raidbots opens in a new tab with this character
-            filled in, and the sim runs on your own Raidbots account.
-          </p>
-          <a
-            href={droptimizer}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-          >
-            Run Droptimizer
-          </a>
-        </div>
+        <DroptimizerCard
+          memberId={memberId}
+          name={profile.name}
+          region={region}
+          realmSlug={realmSlug}
+          report={droptimizer}
+        />
       </section>
     </div>
   );

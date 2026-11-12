@@ -33,7 +33,7 @@ const OAUTH = "https://oauth.battle.net";
  */
 export const BNET_SIGN_OUT_URL = "https://account.battle.net/login/logout";
 
-function apiUrl(region: Region, path: string, namespace: "profile" | "dynamic"): string {
+function apiUrl(region: Region, path: string, namespace: "profile" | "dynamic" | "static"): string {
   const locale = region === "eu" ? "en_GB" : "en_US";
   const sep = path.includes("?") ? "&" : "?";
   return `https://${region}.api.blizzard.com${path}${sep}namespace=${namespace}-${region}&locale=${locale}`;
@@ -141,6 +141,31 @@ export async function fetchCharacters(accessToken: string, region: Region): Prom
       classId: c.playable_class?.id ?? null,
       level: c.level ?? 0,
     }));
+}
+
+// Item names never change within a patch; keep them for the life of the server instance.
+const itemNameCache = new Map<number, string>();
+
+/** Item names from Blizzard's game data, for items the app only knows by id (Droptimizer reports). */
+export async function fetchItemNames(region: Region, ids: number[]): Promise<Map<number, string>> {
+  const missing = [...new Set(ids)].filter((id) => !itemNameCache.has(id));
+  if (missing.length > 0) {
+    const token = await getAppToken();
+    for (let i = 0; i < missing.length; i += 8) {
+      await Promise.all(
+        missing.slice(i, i + 8).map(async (id) => {
+          const res = await fetch(apiUrl(region, `/data/wow/item/${id}`, "static"), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          if (!res.ok) return;
+          const name = ((await res.json()) as { name?: unknown }).name;
+          if (typeof name === "string") itemNameCache.set(id, name);
+        }),
+      );
+    }
+  }
+  return new Map(ids.filter((id) => itemNameCache.has(id)).map((id) => [id, itemNameCache.get(id)!]));
 }
 
 /** The raw Profile API responses the home page is built from (shapes as documented by Blizzard). */

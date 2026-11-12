@@ -114,6 +114,23 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (realm_slug, character_id)
   );
   `,
+
+  // The latest Droptimizer result imported for each character, from a Raidbots report link. upgrades is JSON:
+  // one entry per simmed item with its boss, slot and DPS change (Raidbots keeps the report itself for 28 days).
+  `
+  CREATE TABLE IF NOT EXISTS droptimizer_reports (
+    realm_slug          TEXT NOT NULL,
+    character_id        INTEGER NOT NULL,
+    report_id           TEXT NOT NULL,
+    title               TEXT NOT NULL,
+    simmed_at           TEXT NOT NULL,
+    imported_at         TEXT NOT NULL,
+    imported_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    baseline            REAL NOT NULL,
+    upgrades            TEXT NOT NULL,
+    PRIMARY KEY (realm_slug, character_id)
+  );
+  `,
 ];
 
 async function open(): Promise<Client> {

@@ -7,6 +7,7 @@ import { fetchGuildRoster, fetchRealms, type Realm } from "@/lib/bnet";
 import { saveActiveCharacters } from "@/lib/claims";
 import { config } from "@/lib/config";
 import { isIsoDate, rangeIsValid, todayIn, weekday } from "@/lib/dates";
+import { fetchDroptimizer, reportIdFrom, saveDroptimizer } from "@/lib/droptimizer";
 import { isRegion, realmLabel, REGION_NAMES } from "@/lib/regions";
 import * as repo from "@/lib/repo";
 import { getCurrentUser } from "@/lib/session";
@@ -55,6 +56,35 @@ export async function saveActiveCharactersAction(form: FormData) {
   await saveActiveCharacters(user.id, keys, settings.maxLevel);
   revalidateAll();
   redirect("/");
+}
+
+/** Imports a Raidbots Droptimizer report for a raid team character: its player's own, or any for officers. */
+export async function importDroptimizerAction(memberId: number, link: string): Promise<Result> {
+  const { user, allowed } = await getRosterAccess();
+  if (!user) return { ok: false, error: "Your session has ended. Sign in again." };
+  if (!allowed) return { ok: false, error: "You are no longer on the raid team. Reload the page." };
+
+  const reportId = reportIdFrom(String(link ?? ""));
+  if (!reportId) return { ok: false, error: "Paste the link of a Raidbots report, like raidbots.com/simbot/report/…" };
+
+  const [settings, member] = await Promise.all([repo.getSettings(), repo.getMember(Number(memberId))]);
+  if (!member || !repo.isOnTeam(member, settings)) return { ok: false, error: "That character is not on the raid team." };
+  if (!user.isAdmin && member.ownerUserId !== user.id) {
+    return { ok: false, error: "You can only import reports for characters you claimed." };
+  }
+
+  try {
+    const report = await fetchDroptimizer(reportId, member, settings.guild?.region ?? "eu");
+    await saveDroptimizer(member, report, user.id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    // Messages from readReport/fetchDroptimizer are written for players; anything else is unexpected.
+    if (/^(That report|Raidbots)/.test(message)) return { ok: false, error: message };
+    console.error("Droptimizer import failed", err);
+    return { ok: false, error: "The report could not be read. Check the link and try again." };
+  }
+  revalidatePath("/");
+  return { ok: true };
 }
 
 // ---------- admin ----------

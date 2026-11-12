@@ -1,7 +1,63 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { importDroptimizerAction } from "@/app/actions";
+
+/** Paste box for a Raidbots report link; the page reloads its data once the report is stored. */
+export function DroptimizerImport({ memberId, hasReport }: { memberId: number; hasReport: boolean }) {
+  const router = useRouter();
+  const [link, setLink] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <form
+      className="space-y-1.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!link.trim()) {
+          setError("Paste the report link first.");
+          return;
+        }
+        startTransition(async () => {
+          const result = await importDroptimizerAction(memberId, link);
+          if (result.ok) {
+            setLink("");
+            setError(null);
+            router.refresh();
+          } else {
+            setError(result.error);
+          }
+        });
+      }}
+    >
+      <label htmlFor="droptimizer-link" className="block text-xs text-muted">
+        {hasReport ? "Ran it again? Paste the new report link" : "When the sim is done, paste the report link"}
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="droptimizer-link"
+          value={link}
+          onChange={(e) => {
+            setLink(e.target.value);
+            setError(null);
+          }}
+          placeholder="https://www.raidbots.com/simbot/report/…"
+          className="min-w-0 flex-1 rounded border border-border bg-background px-3 py-1.5 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded border border-border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-60"
+        >
+          {pending ? "Importing…" : "Import"}
+        </button>
+      </div>
+      {error && <p className="text-sm text-red-300">{error}</p>}
+    </form>
+  );
+}
 
 /** Officers: pick any raid team character to look at. */
 export function CharacterPicker({ options, selected }: { options: { id: number; name: string }[]; selected: number }) {

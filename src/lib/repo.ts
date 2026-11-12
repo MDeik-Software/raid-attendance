@@ -309,6 +309,7 @@ export async function forgetUser(bnetId: string) {
     { sql: `DELETE FROM sessions WHERE user_id IN (${user})`, args: [bnetId] },
     { sql: `DELETE FROM user_characters WHERE user_id IN (${user})`, args: [bnetId] },
     { sql: `UPDATE availability SET updated_by_user_id = NULL WHERE updated_by_user_id IN (${user})`, args: [bnetId] },
+    { sql: `UPDATE droptimizer_reports SET imported_by_user_id = NULL WHERE imported_by_user_id IN (${user})`, args: [bnetId] },
     { sql: "DELETE FROM users WHERE bnet_id = ?", args: [bnetId] },
   ]);
 }

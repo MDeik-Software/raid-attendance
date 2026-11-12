@@ -68,6 +68,11 @@ between several). Officers can open any team member's sheet, from the picker or 
   the background every 6 hours.
 - **Run Droptimizer** opens Raidbots in a new tab with the character filled in; the sim runs on the player's
   own Raidbots account. Raidbots has no public API for starting sims.
+- **Importing the result:** paste the Raidbots report link on the sheet. The app reads the report's
+  `data.json`, checks it is a Droptimizer for that character (name, realm, region), and keeps the latest one per
+  character: upgrades by boss with the DPS change, boss names from Raidbots' `instances.json`, item names from
+  Blizzard. Players import for their own characters, officers for anyone. Raidbots deletes reports after 28
+  days; the imported upgrades stay until the next import.
 
 ## Rules
 
