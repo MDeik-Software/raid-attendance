@@ -34,10 +34,10 @@ who drops off the team (left the guild, rank or level change, an officer unticke
 next request. Until an officer imports the guild, only officers can sign in.
 
 Battle.net keeps people signed in, so signing in again after a refusal would bring back the same account. The
-refusal page names the BattleTag and offers *Use a different Battle.net account*: the app signs the player out
-at Battle.net (OpenID Connect sign-out with the ID token of the refused sign-in, returning to
-`/api/auth/callback`) and starts a fresh sign-in. If Battle.net refuses that sign-out, the page explains the
-manual way: sign out of Battle.net in a new tab, then sign in again.
+refusal page names the BattleTag and offers *Use a different Battle.net account* (also linked under the normal
+sign-in button): it sends the player to Battle.net's sign-out (`account.battle.net/login/logout`) with `ref`
+set to Battle.net's sign-in page for this app, so Battle.net signs them out and then asks which account to use.
+Battle.net only continues to its own sites this way, which is why the app cannot return straight to itself.
 
 ## Claiming characters (players)
 

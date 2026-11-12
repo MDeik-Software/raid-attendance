@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { REFUSED_COOKIE } from "@/lib/auth-cookies";
-import { BNET_SIGN_OUT_URL } from "@/lib/bnet";
 import { bnetConfigured, config } from "@/lib/config";
 import { getCurrentUser } from "@/lib/session";
 
@@ -11,7 +10,6 @@ const ERRORS: Record<string, string> = {
   bnet: "Battle.net did not answer as expected. Try again in a minute.",
   db: "Battle.net sign-in worked, but the app could not reach its database. Try again in a minute; if it keeps failing, the server's database settings need checking.",
   team: "This site is for the raid team only, and none of the characters on that Battle.net account are on it. If you raid with us, ask an officer; if you just joined the guild, Battle.net can take a few hours to list you.",
-  switch: "Battle.net did not sign you out, so it would send the same account back.",
   "not-configured": "Battle.net sign-in is not set up on this server yet (BNET_CLIENT_ID / BNET_CLIENT_SECRET).",
 };
 
@@ -29,12 +27,6 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     : typeof error === "string"
       ? ERRORS[error]
       : undefined;
-  const signOutLink = (
-    <a href={BNET_SIGN_OUT_URL} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-      Sign out of Battle.net
-    </a>
-  );
-
   return (
     <main className="flex flex-1 items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6">
@@ -47,26 +39,16 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         {message && <p className="mt-4 rounded bg-red-950/60 px-3 py-2 text-sm text-red-200">{message}</p>}
 
         {!bnetConfigured() ? null : error === "team" ? (
-          // Refused: offer the one-click switch, with the manual way in case Battle.net refuses the sign-out.
           <>
             <a href="/api/auth/switch" className={PRIMARY_BUTTON}>
               Use a different Battle.net account
             </a>
             <p className="mt-2 text-center text-xs text-muted">
-              If Battle.net shows an error instead, {signOutLink} in a new tab, then come back and sign in again.
+              Battle.net signs you out and asks which account to use. If it shows its account page instead, come
+              back here and sign in again.
             </p>
             <a href="/api/auth/login" className={SECONDARY_BUTTON}>
               Try this account again
-            </a>
-          </>
-        ) : error === "switch" ? (
-          <>
-            <ol className="mt-4 list-decimal space-y-1 rounded border border-border py-2 pl-8 pr-3 text-sm text-muted">
-              <li>{signOutLink} (opens in a new tab).</li>
-              <li>Come back to this tab and sign in with the other account.</li>
-            </ol>
-            <a href="/api/auth/login" className={PRIMARY_BUTTON}>
-              Sign in with Battle.net
             </a>
           </>
         ) : (
@@ -75,7 +57,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
               Sign in with Battle.net
             </a>
             <p className="mt-2 text-center text-xs text-muted">
-              Wrong Battle.net account? {signOutLink} first, then sign in here.
+              Wrong Battle.net account?{" "}
+              <a href="/api/auth/switch" className="text-accent hover:underline">
+                Use a different one
+              </a>
+              .
             </p>
           </>
         )}
