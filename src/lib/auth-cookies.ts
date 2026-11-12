@@ -1,10 +1,12 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { anyOnTeam } from "./access";
 import type { BnetCharacter } from "./bnet";
 import { hasActiveCharacter, syncAccountCharacters } from "./claims";
 import { config } from "./config";
-import { upsertUser } from "./repo";
-import { createSession, sessionCookie } from "./session";
+import { SIGN_IN_MAX_AGE_MS, refreshGuildIfStale } from "./guild-refresh";
+import { forgetUser, upsertUser } from "./repo";
+import { createSession, isAdminBattletag, sessionCookie } from "./session";
 
 export const STATE_COOKIE = "rr_oauth_state";
 
@@ -14,9 +16,11 @@ export function appUrl(path: string): URL {
 }
 
 /**
- * Saves the user and the characters on their account, starts a session and sends them on (303 so a POST
- * turns into a GET): to the grid, or to the character picker while they have no active character yet.
- * Database failures get their own error, so they are not mistaken for Battle.net problems.
+ * Lets in officers and players with a raid team character on their account. Anyone else is turned away
+ * without a session, and nothing about their account is kept. Those let in are saved with the characters on
+ * their account and sent on (303 so a POST turns into a GET): to the grid, or to the character picker while
+ * they have no active character yet. Database failures get their own error, so they are not mistaken for
+ * Battle.net problems.
  */
 export async function finishSignIn(
   bnetId: string,
@@ -24,6 +28,14 @@ export async function finishSignIn(
   characters: BnetCharacter[],
 ): Promise<NextResponse> {
   try {
+    if (!isAdminBattletag(battletag)) {
+      await refreshGuildIfStale(SIGN_IN_MAX_AGE_MS);
+      if (!(await anyOnTeam(characters))) {
+        await forgetUser(bnetId);
+        return loginError("team");
+      }
+    }
+
     const userId = await upsertUser(bnetId, battletag);
     await syncAccountCharacters(userId, characters);
     const next = (await hasActiveCharacter(userId)) ? "/" : "/characters";

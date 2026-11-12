@@ -161,6 +161,17 @@ export async function getMember(id: number): Promise<Member | undefined> {
   return row && toMember(row);
 }
 
+/** The imported guild members that are characters on the user's Battle.net account, ticked or not. */
+export async function listAccountMembers(userId: number): Promise<Member[]> {
+  const rows = await all<MemberRow>(
+    `${MEMBER_SELECT}
+     WHERE EXISTS (SELECT 1 FROM user_characters a
+                   WHERE a.user_id = ? AND a.realm_slug = g.realm_slug AND a.character_id = g.character_id)`,
+    [userId],
+  );
+  return rows.map(toMember);
+}
+
 /** Whether the character belongs on the team by the rank and level rules alone. */
 export function teamByDefault(m: Member, settings: Settings): boolean {
   return m.inGuild && settings.raidRanks.includes(m.rank) && m.level >= settings.maxLevel;
@@ -286,6 +297,20 @@ export async function upsertUser(bnetId: string, battletag: string): Promise<num
   );
   if (!row) throw new Error("Could not save the user");
   return row.id;
+}
+
+/**
+ * Removes everything stored about a Battle.net account: its sessions, its characters and the user row.
+ * Answers it once gave stay on the grid without the name of who gave them.
+ */
+export async function forgetUser(bnetId: string) {
+  const user = "SELECT id FROM users WHERE bnet_id = ?";
+  await batch([
+    { sql: `DELETE FROM sessions WHERE user_id IN (${user})`, args: [bnetId] },
+    { sql: `DELETE FROM user_characters WHERE user_id IN (${user})`, args: [bnetId] },
+    { sql: `UPDATE availability SET updated_by_user_id = NULL WHERE updated_by_user_id IN (${user})`, args: [bnetId] },
+    { sql: "DELETE FROM users WHERE bnet_id = ?", args: [bnetId] },
+  ]);
 }
 
 /** WoW names are unique per realm and case-insensitive; accents are significant. */

@@ -21,6 +21,17 @@ On *Roster & settings*:
    into a raid rank join the team on the next fetch. The block number groups rows on the grid.
 
 Members who leave the guild drop off at the next fetch, unless an officer explicitly kept them on the team.
+The app also fetches the roster again by itself: at a sign-in when the stored copy is over 15 minutes old,
+and in the background while people use the grid when it is over 6 hours old. A failed or empty answer from
+Battle.net keeps the stored roster.
+
+## Who can see the grid
+
+Only the raid team: officers (`ADMIN_BATTLETAGS`) and players with at least one raid team character on their
+Battle.net account (ticked or not). Anyone else who signs in is turned away with an explanation; no session is
+started and nothing about their account is stored. The check runs on every page and every change, so a player
+who drops off the team (left the guild, rank or level change, an officer unticked them) is signed out on their
+next request. Until an officer imports the guild, only officers can sign in.
 
 ## Claiming characters (players)
 

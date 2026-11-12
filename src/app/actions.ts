@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getRosterAccess, requireRosterAccess } from "@/lib/access";
 import { fetchGuildRoster, fetchRealms, type Realm } from "@/lib/bnet";
 import { saveActiveCharacters } from "@/lib/claims";
 import { config } from "@/lib/config";
@@ -21,8 +22,9 @@ function revalidateAll() {
 
 /** Sets one cell. Players may change the team characters they claimed, from today on; admins anything. */
 export async function setAvailabilityAction(memberId: number, date: string, status: Status): Promise<Result> {
-  const user = await getCurrentUser();
+  const { user, allowed } = await getRosterAccess();
   if (!user) return { ok: false, error: "Your session has ended. Sign in again." };
+  if (!allowed) return { ok: false, error: "You are no longer on the raid team. Reload the page." };
   if (!Number.isInteger(memberId) || !isIsoDate(date) || !isStatus(status)) {
     return { ok: false, error: "That change was not valid." };
   }
@@ -46,8 +48,7 @@ export async function setAvailabilityAction(memberId: number, date: string, stat
 
 /** Saves which of the player's characters are active; active raid team characters become theirs to edit. */
 export async function saveActiveCharactersAction(form: FormData) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requireRosterAccess();
   const settings = await repo.getSettings();
   const keys = new Set(form.getAll("active").map(String));
   await saveActiveCharacters(user.id, keys, settings.maxLevel);

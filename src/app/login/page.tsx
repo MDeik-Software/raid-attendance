@@ -7,6 +7,7 @@ const ERRORS: Record<string, string> = {
   state: "The sign-in link expired. Try again.",
   bnet: "Battle.net did not answer as expected. Try again in a minute.",
   db: "Battle.net sign-in worked, but the app could not reach its database. Try again in a minute; if it keeps failing, the server's database settings need checking.",
+  team: "This site is for the raid team only, and none of the characters on that Battle.net account are on it. If you raid with us, ask an officer; if you just joined the guild, Battle.net can take a few hours to list you.",
   "not-configured": "Battle.net sign-in is not set up on this server yet (BNET_CLIENT_ID / BNET_CLIENT_SECRET).",
 };
 
@@ -20,8 +21,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-6">
         <h1 className="text-xl font-semibold">Raid Roster</h1>
         <p className="mt-2 text-sm text-muted">
-          Sign in with Battle.net to mark which raid nights you can make. You then pick the characters you raid on,
-          and can change their rows on the grid.
+          For the raid team only. Sign in with Battle.net to mark which raid nights you can make. You then pick the
+          characters you raid on, and can change their rows on the grid.
         </p>
 
         {message && <p className="mt-4 rounded bg-red-950/60 px-3 py-2 text-sm text-red-200">{message}</p>}

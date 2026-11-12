@@ -1,15 +1,13 @@
-import { redirect } from "next/navigation";
 import { saveActiveCharactersAction } from "@/app/actions";
 import { AppHeader } from "@/components/AppHeader";
 import { SubmitButton } from "@/components/SubmitButton";
+import { requireRosterAccess } from "@/lib/access";
 import { characterKey, listAccountCharacters } from "@/lib/claims";
 import { classById } from "@/lib/classes";
 import { getSettings, isOnTeam, listMembers } from "@/lib/repo";
-import { getCurrentUser } from "@/lib/session";
 
 export default async function CharactersPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requireRosterAccess();
 
   const [settings, characters, members] = await Promise.all([
     getSettings(),

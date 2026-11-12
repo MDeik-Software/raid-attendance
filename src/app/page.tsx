@@ -1,16 +1,18 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { AppHeader } from "@/components/AppHeader";
 import { AvailabilityGrid, UnclaimedMark, type GridColumn, type GridRow } from "@/components/AvailabilityGrid";
+import { requireRosterAccess } from "@/lib/access";
 import { config } from "@/lib/config";
 import { RESET_WEEKDAY, WEEKDAYS, raidDates, shortLabel, todayIn, weekday } from "@/lib/dates";
+import { BROWSING_MAX_AGE_MS, refreshGuildIfStale } from "@/lib/guild-refresh";
 import { defaultStatus, getSettings, listAvailability, listTeam } from "@/lib/repo";
-import { getCurrentUser } from "@/lib/session";
 import type { Status } from "@/lib/status";
 
 export default async function GridPage({ searchParams }: PageProps<"/">) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requireRosterAccess();
+  // Keeps the team current (and drops players who left the guild) without slowing this page down.
+  after(() => refreshGuildIfStale(BROWSING_MAX_AGE_MS));
 
   const settings = await getSettings();
   const team = await listTeam(settings);
