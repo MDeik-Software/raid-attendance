@@ -27,9 +27,9 @@ export type Realm = { slug: string; name: string };
 const OAUTH = "https://oauth.battle.net";
 
 /**
- * Battle.net's own sign-out page. Battle.net keeps people signed in and sends the same account straight back
- * to the app, so switching to another Battle.net account needs a sign-out there first. Battle.net ignores a
- * return address outside its own sites, so the app opens this in a new tab.
+ * Battle.net's own sign-out page, the manual fallback for switching accounts. Battle.net keeps people signed
+ * in and sends the same account straight back to the app, so switching needs a sign-out there first. This
+ * page ignores return addresses outside Battle.net's own sites, so the app opens it in a new tab.
  */
 export const BNET_SIGN_OUT_URL = "https://account.battle.net/login/logout";
 
@@ -58,7 +58,22 @@ export function authorizeUrl(state: string): string {
   return `${OAUTH}/authorize?${params}`;
 }
 
-export async function exchangeCode(code: string): Promise<string> {
+/**
+ * OpenID Connect sign-out at Battle.net, which comes back to the app's callback (an address the Battle.net
+ * client already allows). idToken is Battle.net's proof of the sign-in that is being ended.
+ */
+export function signOutUrl(idToken: string, state: string): string {
+  const params = new URLSearchParams({
+    id_token_hint: idToken,
+    post_logout_redirect_uri: redirectUri(),
+    client_id: config.bnetClientId,
+    state,
+  });
+  return `${OAUTH}/logout?${params}`;
+}
+
+/** The player's access token, plus the ID token (scope openid) that a later Battle.net sign-out needs. */
+export async function exchangeCode(code: string): Promise<{ accessToken: string; idToken: string | null }> {
   const res = await fetch(`${OAUTH}/token`, {
     method: "POST",
     headers: { Authorization: clientAuth(), "Content-Type": "application/x-www-form-urlencoded" },
@@ -66,9 +81,9 @@ export async function exchangeCode(code: string): Promise<string> {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Battle.net token exchange failed: HTTP ${res.status}`);
-  const json = (await res.json()) as { access_token?: string };
+  const json = (await res.json()) as { access_token?: string; id_token?: string };
   if (!json.access_token) throw new Error("Battle.net token response had no access_token");
-  return json.access_token;
+  return { accessToken: json.access_token, idToken: json.id_token ?? null };
 }
 
 // The app's own token (client credentials) for guild and realm data; it lasts a day, so it is reused.

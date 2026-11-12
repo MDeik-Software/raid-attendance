@@ -33,6 +33,12 @@ started and nothing about their account is stored. The check runs on every page 
 who drops off the team (left the guild, rank or level change, an officer unticked them) is signed out on their
 next request. Until an officer imports the guild, only officers can sign in.
 
+Battle.net keeps people signed in, so signing in again after a refusal would bring back the same account. The
+refusal page names the BattleTag and offers *Use a different Battle.net account*: the app signs the player out
+at Battle.net (OpenID Connect sign-out with the ID token of the refused sign-in, returning to
+`/api/auth/callback`) and starts a fresh sign-in. If Battle.net refuses that sign-out, the page explains the
+manual way: sign out of Battle.net in a new tab, then sign in again.
+
 ## Claiming characters (players)
 
 On every sign-in the app asks Blizzard's Profile API (`/profile/user/wow`, scope `wow.profile`) for the
